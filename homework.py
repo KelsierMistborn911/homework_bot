@@ -6,8 +6,8 @@ import time
 import logging
 import requests
 from dotenv import load_dotenv
-from telegram import Bot
-from telegram.error import TelegramError
+import telebot
+from telebot.apihelper import ApiTelegramException
 
 load_dotenv()
 
@@ -30,6 +30,8 @@ HOMEWORK_STATUSES = {
     'reviewing': 'Работа взята на проверку.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
+
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 
 def check_tokens():
@@ -83,12 +85,12 @@ def parse_status(homework):
     return f'Изменился статус работы "{homework_name}". {verdict}'
 
 
-def send_message(bot, message):
+def send_message(message):
     """Отправляет сообщение в Telegram."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logger.debug(f'Бот отправил сообщение: {message}')
-    except TelegramError as e:
+    except ApiTelegramException as e:
         logger.error(f'Сбой при отправке сообщения: {e}')
         raise
 
@@ -98,10 +100,11 @@ def main():
     if not check_tokens():
         logger.critical('Отсутствует обязательная переменная окружения')
         sys.exit(1)
-    bot = Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+
+    timestamp = 0
     last_error = None
     logger.info('Бот запущен')
+
     while True:
         try:
             response = get_api_answer(timestamp)
@@ -109,7 +112,7 @@ def main():
             if homeworks:
                 for homework in homeworks:
                     message = parse_status(homework)
-                    send_message(bot, message)
+                    send_message(message)
             else:
                 logger.debug('Новых статусов нет')
             timestamp = response.get('current_date', timestamp)
@@ -118,7 +121,7 @@ def main():
             logger.error(f'Сбой в работе программы: {e}')
             if last_error != str(e):
                 try:
-                    send_message(bot, f'Сбой в работе программы: {e}')
+                    send_message(f'Сбой в работе программы: {e}')
                     last_error = str(e)
                 except Exception:
                     pass
